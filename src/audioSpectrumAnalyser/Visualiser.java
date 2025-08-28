@@ -1,0 +1,13 @@
+package audioSpectrumAnalyser;
+
+public interface Visualiser {
+	public void update(float[] fftRes);
+	
+	public void setBandsNum(int newBandsNum);
+	
+	public void setSampleRate(int newSampleRate);
+	
+	public void setBuffSize(int newBuffSize);
+	
+	public void setSensivity(int newSens);
+}
