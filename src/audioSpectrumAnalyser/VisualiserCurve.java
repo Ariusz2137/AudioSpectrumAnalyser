@@ -12,11 +12,15 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Set;
 
 import javax.swing.JPanel;
 
 public class VisualiserCurve extends JPanel implements Visualiser {
-	private BufferedImage legendImage;
+private BufferedImage legendImage;
 	
 	private int sampleRate;
 	private int buffSize;
@@ -30,9 +34,15 @@ public class VisualiserCurve extends JPanel implements Visualiser {
 	
 	private int[] freqAtPx; //stores corresponding frequency for each column
 	private ArrayList<ArrayList<Integer>> binsAtPx; //stores ArrayList of corresponding fft bins for each pixel
+	private LinkedHashMap<Integer, Integer> interpolationData;
+	private float[] curveData; //stores interpolated array of size same as panel width
+	private SgFilter sgf;
+	private float[] x;
 	
 	private boolean mouseOver;
 	private int mouseX;
+	
+	
 	
 	public VisualiserCurve() {
 		this.addComponentListener(new ComponentAdapter() {
@@ -60,6 +70,8 @@ public class VisualiserCurve extends JPanel implements Visualiser {
 				}
 			}
 		});
+		sgf = new SgFilter(15, 0, 3);
+		
 	}
 
 	public void update(float[] fftRes) {
@@ -160,18 +172,14 @@ public class VisualiserCurve extends JPanel implements Visualiser {
 		BufferedImage res = new BufferedImage(getWidth(), getHeight(), BufferedImage.TYPE_INT_ARGB);
 		try {
 			float sum;
-			
 			float heightMultiplier = (float)Math.pow(sensivity, 2) * getHeight()/300;
-			int repeatTimes;
-			for(int i = 0; i < getWidth(); i++) {
+			int i = 0;
+			curveData = new float[getWidth()];
+			while(i < getWidth()) {
 				sum = 0;
 				
 				//System.out.println("first bin: " + binsAtPx.get(i).getFirst() + " last bin: " + binsAtPx.get(i).getLast());
 				if( binsAtPx.get(i).size() == 0) continue;
-				if( binsAtPx.get(i).getFirst() > 99999) {
-					repeatTimes = binsAtPx.get(i).getFirst()%100000;
-					binsAtPx.get(i).set(0, binsAtPx.get(i).getFirst()/100000);
-				}
 				for(int j = binsAtPx.get(i).getFirst(); j <= binsAtPx.get(i).getLast(); j++) {
 					sum += fftRes[j];
 				}
@@ -182,22 +190,62 @@ public class VisualiserCurve extends JPanel implements Visualiser {
 				if(sum > getHeight())
 					sum = getHeight();
 				
-				res.setRGB(i, getHeight() - (int)sum - 1, Color.green.getRGB());
+				curveData[i] = sum;
+				
+				if(interpolationData.get(i) != null) {
+					i += interpolationData.get(i);
+				}
+				else {
+					i++;
+				}
+				
+						
 			}
-			
+			//System.out.println(Arrays.toString(curveData));
+			//System.out.println(interpolationData);	
+			Set<Integer> interpolationIdxs = interpolationData.keySet();
+			int idx;
+			float pixelDelta;
+			int mtp;
+			for(Object idxO : interpolationIdxs) {
+				idx = (int)idxO;
+				pixelDelta = (curveData[idx +  interpolationData.get(idx)] - curveData[idx])/(interpolationData.get(idx));
+				mtp = 1;
+				//System.out.println("idx: " + idx + " delta: " + pixelDelta + " k: " + (idx+1) + " - " + (idx + interpolationData.get(idx) - 1));
+				for(int k = idx+1; k < idx + interpolationData.get(idx); k++){
+					curveData[k] = mtp*pixelDelta + curveData[idx];
+					mtp++;
+				}
+			}
+			//System.out.println(Arrays.toString(curveData));	
+			sgf.process(curveData, x, curveData);
+			int y1, y2;
+			int height = getHeight();
+			Graphics2D g2d = (Graphics2D)res.getGraphics();
+			g2d.setColor(Color.green);
+			for(int j = 0; j < curveData.length - 1; j++) {
+				y1 = getHeight()-(int)curveData[j]-1;
+				y2 = getHeight()-(int)curveData[j+1]-1;
+				if( y1 >= height)
+					y1 = height - 1;
+				if( y2 >= height)
+					y2 = height - 1;
+				g2d.drawLine(j, y1, j+1, y2);
+			}
 		} catch (Exception e) {
-			System.err.println("error during generating visualisation frame: " + e.getMessage());
+			System.err.println("error has occured during generating visualisation frame: " + e.getMessage());
 		}
 		
 		return res;
 	}
 	
-	private void calculateBinsAtPx() {
+	private void calculateBinsAtPx() { //also fills interpolationData, x
 		if(getWidth() <= 0 || sampleRate == 0 || buffSize == 0 || bandsNum == 0 || freqAtPx == null) return;
 		binsAtPx = new ArrayList<ArrayList<Integer>>(getWidth());
-		double freqSpacing = sampleRate*1.0f/buffSize;
+		double freqSpacing = sampleRate*1.0d/buffSize;
 		double currFreq = freqSpacing;
 		int binIndex = 0;
+		interpolationData = new LinkedHashMap<Integer, Integer>();
 		for(int px = 0; px < getWidth(); px++) {
 			binsAtPx.add(new ArrayList<Integer>());
 			while(binIndex < fftRes.length) {
@@ -213,6 +261,7 @@ public class VisualiserCurve extends JPanel implements Visualiser {
 				currFreq += freqSpacing;
 			}
 		}
+		
 		for(int i = 0; i < binsAtPx.size(); i++) {
 			if(binsAtPx.get(i).size() > 2) {
 				ArrayList<Integer> tmp = new ArrayList<>();
@@ -221,31 +270,30 @@ public class VisualiserCurve extends JPanel implements Visualiser {
 				binsAtPx.set(i, tmp);
 			}
 		}
-		boolean isRepeating = false;
-		int repeatingStart = 0;
-		int repeatingTimes = 0;
-		for(int i = 0; i < binsAtPx.size() -1; i++) {
-			if(binsAtPx.get(i).getFirst() == binsAtPx.get(i+1).getFirst()) {
-				System.out.print("nigga");
-				repeatingTimes++;
-				if(!isRepeating) {
-					isRepeating = true;
-					repeatingStart = i;
+		interpolationData = new LinkedHashMap<>();
+		int repeatingIdx = -1;
+		
+		for(int i = 0; i < binsAtPx.size()-1; i++) {
+			if(binsAtPx.get(i).getFirst()== binsAtPx.get(i+1).getFirst()) {
+				if(repeatingIdx == -1) {
+					repeatingIdx = i;
+					interpolationData.put(i, 2);
+				}
+				else {
+					interpolationData.put(repeatingIdx, interpolationData.get(repeatingIdx)+1);
 				}
 			}
 			else {
-				if(repeatingTimes > 0) {
-					binsAtPx.get(repeatingStart).set(0, binsAtPx.get(i).getFirst()*100000 + repeatingTimes + 1);
-					for(int j = 0; j < repeatingTimes; j++) {
-						binsAtPx.remove(repeatingStart + 1);
-					}
-					i -= repeatingTimes;
-					repeatingTimes = 0;
-				}
-				isRepeating = false;
+				repeatingIdx = -1;
 			}
 		}
+		
 		System.out.println(binsAtPx);
+		System.out.println(interpolationData);
+		x = new float[getWidth()];
+		for(int j = 0; j < getWidth(); j++) {
+			x[j] = j;
+		}
 		
 	}
 	
