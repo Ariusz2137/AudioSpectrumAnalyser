@@ -241,4 +241,7 @@ public class VisualiserFixedFreqScale extends JPanel implements Visualiser{
 		}
 		calculateBinsAtPx();
 	}
+	public void addEventListener(VisualiserEventListener el) {}
+	
+	public void showError(String message) {}
 }

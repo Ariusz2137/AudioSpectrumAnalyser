@@ -6,8 +6,6 @@ import org.jtransforms.fft.FloatFFT_1D;
 
 public class FFTProcessor{
 	
-	private int windowFunction; //0 for none, 1 for Hann, 2 for Hamming, 3 for Blackman
-	
 	private interface ProcessfftResults {
 		float[] execute(float[] data);
 	}
@@ -15,7 +13,7 @@ public class FFTProcessor{
 		public float[] execute(float data[]) {
 			float res[] = new float[data.length/2];
 			for(int i = 0; i < data.length - 2; i += 2) {
-				res[i/2] = (float)(Math.sqrt(Math.pow(data[i+2], 2)  + Math.pow(data[i+3], 2))*10000/data.length*Math.pow(i+1, 1.0f/3)); 	//turns out that multiplying each bin by cubic root of its index + 1 actually makes result flat on pink noise, which 
+				res[i/2] = (float)(Math.sqrt(Math.pow(data[i+2], 2)  + Math.pow(data[i+3], 2))*10000/data.length*Math.sqrt(i/2*freqSpacing)); 	//turns out that multiplying each bin by cubic root of its index + 1 actually makes result flat on pink noise, which 
 			}																																//is similar to how humans perceive frequencies loudness, found it randomly
 			res[data.length/2-1] = Math.abs(data[1]);
 			return res;
@@ -25,12 +23,16 @@ public class FFTProcessor{
 		public float[] execute(float data[]) {
 			float res[] = new float[(data.length- 1) / 2];
 			for(int i = 0; i < data.length - 3; i += 2) {
-				res[i/2] = (float)(Math.sqrt(Math.pow(data[i+2], 2)  + Math.pow(data[i+3], 2)) *10000/data.length*Math.sqrt(i+1));
+				res[i/2] = (float)(Math.sqrt(Math.pow(data[i+2], 2)  + Math.pow(data[i+3], 2)) *10000/data.length*Math.sqrt(i/2*freqSpacing));
 			}
 			res[res.length - 1] = (float)Math.sqrt(Math.pow(data[data.length-1], 2)  + Math.pow(data[1], 2));
 			return res;
 		}
 	}
+	
+	private int windowFunction; //0 for none, 1 for Hann, 2 for Hamming, 3 for Blackman
+	private int sampleRate;
+	private static float freqSpacing;
 	
 	private ProcessfftResults processfftResults;
 	
@@ -43,6 +45,7 @@ public class FFTProcessor{
 	}
 	public void setSize(int size) {
 		samplesNum = size;
+		freqSpacing = sampleRate*1.0f/samplesNum;
 		jTransFFT = new FloatFFT_1D(size);
 		if(size % 2 == 0)
 			processfftResults = new ProcessfftResultsEven();
@@ -106,5 +109,11 @@ public class FFTProcessor{
 			//}
 			return res;
 		//}).start();
+	}
+	public void setSampleRate(int newSampleRate) {
+		sampleRate = newSampleRate;
+		if(samplesNum != 0) {
+			freqSpacing = sampleRate*1.0f/samplesNum;
+		}
 	}
 }

@@ -9,6 +9,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
 
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -18,7 +19,6 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSlider;
 import javax.swing.SwingConstants;
-import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
@@ -40,8 +40,6 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
-import com.sun.source.doctree.EscapeTree;
-
 public class SettingsPanel extends JPanel {
 
 	private GridBagConstraints c;
@@ -50,18 +48,21 @@ public class SettingsPanel extends JPanel {
 	private SettingsEventListener el;
 	
 	// ++default settings
-	private int fps = 30;
-	private int overlap = 1;
-	private int bandsNum = 100;
+	private int fps = 60;
+	private int overlap = 10;
 	private int stereoMode = 0;
 	private int windowFunc = 1;
 	private int sensivityMin = 0;
 	private int sensivityMax = 100;
 	private int sensivity = 50;
 	
-	private String xmlFilename = "config.xml";
+	private String xmlVisSettingsNodeName = "VisSettings";
+	
+	private final String xmlFilename = "config.xml";
 	private Color fieldsErrBgColor = new Color(100, 0, 0);
 	// --default settings
+	
+	private Element visSettingsElement;
 	
 	private String currHostName;
 	private String currDeviceName;
@@ -80,6 +81,7 @@ public class SettingsPanel extends JPanel {
 			
 			@Override
 			public void removeUpdate(DocumentEvent e) {
+				
 				try {
 					if(Integer.parseInt(targetFPSField.getText()) < 1)
 	                    targetFPSField.setBackground(fieldsErrBgColor);
@@ -91,6 +93,7 @@ public class SettingsPanel extends JPanel {
 				} catch (NumberFormatException ex) {
 					targetFPSField.setBackground(fieldsErrBgColor);
 				}
+				
 			}
 			
 			@Override
@@ -158,52 +161,11 @@ public class SettingsPanel extends JPanel {
 		JPanel subBufferPlusMinus = constructPlusMinus(subBufferField);
 		addToGrid(subBufferPlusMinus, 1, 2, 1);
 		
-		addToGrid(new JLabel("Bands number:"), 2, 0, 1);
-		JFormattedTextField bandsNumField = constructNumField(bandsNum);
-		bandsNumField.getDocument().addDocumentListener(new DocumentListener() {
-			@Override
-			public void removeUpdate(DocumentEvent e) {
-				if(bandsNumField.getText().equals("")) return;
-				try {
-					System.out.println("sraken");
-					int num = Integer.parseInt(bandsNumField.getText());
-					System.out.println("parsing done");
-	                el.setBandsNumber(num);
-	                subBufferField.setBackground(fieldsBackgrColor);
-	                updateXmlFile("bandsNum", bandsNumField.getText());
-				} catch (NumberFormatException ex) {
-					bandsNumField.setBackground(fieldsErrBgColor);
-					ex.printStackTrace();
-				}
-			}	
-			@Override
-			public void insertUpdate(DocumentEvent e) {
-				if(bandsNumField.getText().equals("")) return;
-				try {
-					System.out.println("pierdaken");
-					int num = Integer.parseInt(bandsNumField.getText());
-					System.out.println("parsing done");
-					el.setBandsNumber(num);
-	                subBufferField.setBackground(fieldsBackgrColor);
-	                updateXmlFile("bandsNum", bandsNumField.getText());
-				} catch (NumberFormatException ex) {
-					bandsNumField.setBackground(fieldsErrBgColor);
-					ex.printStackTrace();
-				}
-			}
-			@Override
-			public void changedUpdate(DocumentEvent e) {}
-		});
-		
-		addToGrid(bandsNumField, 2, 1, 1);
-		addToGrid(constructPlusMinus(bandsNumField), 2, 2, 1);
-		
 		addToGrid(new JLabel("Stereo mix mode:"), 3, 0, 1);
 		JComboBox<String> stereoModeBox = new JComboBox<String>();
-		stereoModeBox.addItem("Max");
+		stereoModeBox.addItem("Average");
 		stereoModeBox.addItem("Left only");
 		stereoModeBox.addItem("Right only");
-		stereoModeBox.addItem("Average");
 		stereoModeBox.setSelectedIndex(stereoMode);
 		stereoModeBox.addActionListener(new ActionListener() {	
 			@Override
@@ -276,7 +238,12 @@ public class SettingsPanel extends JPanel {
 				transformer = TransformerFactory.newInstance().newTransformer();
 				for(int i = 0; i < elems.getLength(); i++) {
 					node = elems.item(i);
-					System.out.printf("name: %s value: %s\n", node.getNodeName(), node.getTextContent());
+					//System.out.printf("name: %s value: %s\n", node.getNodeName(), node.getTextContent());
+					if(node.getNodeName() == xmlVisSettingsNodeName) {
+						visSettingsElement = (Element)node;
+						continue;
+					}
+					
 					switch (node.getNodeName().trim()) {	
 					case "fps": {
 						fps = Integer.parseInt(node.getTextContent());
@@ -285,10 +252,6 @@ public class SettingsPanel extends JPanel {
 					case "overlap": {
 						overlap = Integer.parseInt(node.getTextContent());
 						break;
-					}
-					case "bandsNum": {
-						 bandsNum = Integer.parseInt(node.getTextContent());
-						 break;
 					}
 					case "stereoMode": {
 						 stereoMode = Integer.parseInt(node.getTextContent());
@@ -318,6 +281,9 @@ public class SettingsPanel extends JPanel {
 						currDeviceName = node.getTextContent();
 						break;
 					}
+					case "visPanel": {
+						continue;
+					}
 					default:
 						System.err.println("Unexpected value: " + node.getNodeName());
 						continue;
@@ -328,18 +294,24 @@ public class SettingsPanel extends JPanel {
 			else {
 				doc = builder.newDocument();
 				doc.appendChild(doc.createElement("SettingsPanel"));
-				xmlNodesNames = new String[] {"fps", "overlap", "bandsNum", "stereoMode", "windowFunc", "sensivityMin", "sensivityMax", "sensivity", "hostName", "deviceName"};
+				xmlNodesNames = new String[] {"fps", "overlap", "stereoMode", "windowFunc", "sensivityMin", "sensivityMax", "sensivity", "hostName", "deviceName"};
+				
+				currHostName = new String();
+				currDeviceName = new String();
 				
 				addToDocument(doc, xmlNodesNames[0], Integer.toString(fps));
 				addToDocument(doc, xmlNodesNames[1], Integer.toString(overlap));
-				addToDocument(doc, xmlNodesNames[2], Integer.toString(bandsNum));
-				addToDocument(doc, xmlNodesNames[3], Integer.toString(stereoMode));
-				addToDocument(doc, xmlNodesNames[4], Integer.toString(windowFunc));
-				addToDocument(doc, xmlNodesNames[5], Integer.toString(sensivityMin));
-				addToDocument(doc, xmlNodesNames[6], Integer.toString(sensivityMax));
-				addToDocument(doc, xmlNodesNames[7], Integer.toString(sensivity));
-				addToDocument(doc, xmlNodesNames[8], currHostName);
-				addToDocument(doc, xmlNodesNames[9], currDeviceName);
+				addToDocument(doc, xmlNodesNames[2], Integer.toString(stereoMode));
+				addToDocument(doc, xmlNodesNames[3], Integer.toString(windowFunc));
+				addToDocument(doc, xmlNodesNames[4], Integer.toString(sensivityMin));
+				addToDocument(doc, xmlNodesNames[5], Integer.toString(sensivityMax));
+				addToDocument(doc, xmlNodesNames[6], Integer.toString(sensivity));
+				addToDocument(doc, xmlNodesNames[7], currHostName);
+				addToDocument(doc, xmlNodesNames[8], currDeviceName);
+				
+				visSettingsElement = doc.createElement(xmlVisSettingsNodeName);
+				
+				doc.getDocumentElement().appendChild(visSettingsElement);
 				
 				elems = doc.getChildNodes().item(0).getChildNodes();
 				transformer = TransformerFactory.newInstance().newTransformer();
@@ -402,12 +374,40 @@ public class SettingsPanel extends JPanel {
 		this.el = el;
 		el.setFullConfig(fps, overlap, stereoMode);
 		el.windowFunctionChanged(windowFunc);
-		el.setBandsNumber(bandsNum);
 		el.sensivityChanged(sensivity);
 		if(!currHostName.equals(""))
 			el.setHost(currHostName);
 		if(!currHostName.equals("") && !currDeviceName.equals(""))
 			el.setDevice(currDeviceName);
+	}
+	public HashMap<String, String> getVisSettings(){
+		HashMap<String, String> res = new HashMap<String, String>();
+		NodeList nodeList = visSettingsElement.getChildNodes();
+		for(int i = 0; i < nodeList.getLength(); i++) {
+			res.put(nodeList.item(i).getNodeName(), nodeList.item(i).getTextContent());
+		}	
+		return res;
+	}
+	public void saveVisSetting(String name, String value) {
+		NodeList nodeList = visSettingsElement.getChildNodes();
+		boolean newNode = true;
+		for(int i = 0; i < nodeList.getLength(); i++) {
+			if(nodeList.item(i).getNodeName().equals(name)) {
+				nodeList.item(i).setTextContent(value);
+				newNode = false;
+			}
+		}
+		if(newNode) {
+			Element element = doc.createElement(name);
+			element.setTextContent(value);
+			visSettingsElement.appendChild(element);
+		}
+		try {
+			transformer.transform(new DOMSource(doc), new StreamResult(file));
+		} catch (TransformerException e) {
+			e.printStackTrace();
+		}
+		return;
 	}
 	
     private JFormattedTextField constructNumField(int dflt){

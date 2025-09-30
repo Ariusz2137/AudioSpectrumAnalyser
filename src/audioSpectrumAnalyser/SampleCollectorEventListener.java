@@ -10,4 +10,6 @@ public interface SampleCollectorEventListener {
 	public void hostChanged(String newHost);
 	
 	public void deviceChanged(String newDevice);
+	
+	public void errorOccured(String message);
 }

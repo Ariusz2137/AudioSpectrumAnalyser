@@ -343,4 +343,7 @@ public class VisualiserFixedBarWidth extends JPanel implements Visualiser{
 	public void setSensivity(int newSens) {
 		this.sensivity = newSens;
 	}
+	public void addEventListener(VisualiserEventListener el) {}
+	
+	public void showError(String message) {}
 }

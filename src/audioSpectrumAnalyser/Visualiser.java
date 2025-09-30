@@ -10,4 +10,9 @@ public interface Visualiser {
 	public void setBuffSize(int newBuffSize);
 	
 	public void setSensivity(int newSens);
+	
+	public void showError(String message);
+	
+	public void addEventListener(VisualiserEventListener el);
+	
 }

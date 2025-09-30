@@ -1,14 +1,11 @@
 package audioSpectrumAnalyser;
 
-import java.awt.Color;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.util.HashMap;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import javax.swing.JPanel;
-import javax.swing.plaf.basic.BasicScrollPaneUI.VSBChangeListener;
 
 public class MainPanel extends JPanel {
 
@@ -38,8 +35,8 @@ public class MainPanel extends JPanel {
 		
 		c.gridx = 1;
 		c.gridy = 0;
-		c.weightx = 0;
-		c.weighty = 0;
+		c.weightx = 1;
+		c.weighty = 1;
 		
 		gridBag.setConstraints(sp, c);
 		this.add(sp);
@@ -62,6 +59,7 @@ public class MainPanel extends JPanel {
 			@Override
 			public void sampleRateChanged(int newSampleRate) {
 				vis.setSampleRate(newSampleRate);
+				fftProcessor.setSampleRate(newSampleRate);
 			}
 			@Override
 			public void hostChanged(String newHost) {
@@ -70,6 +68,10 @@ public class MainPanel extends JPanel {
 			@Override
 			public void deviceChanged(String newDevice) {
 				sp.setDeviceName(newDevice);
+			}
+			@Override
+			public void errorOccured(String message) {
+				vis.showError(message);
 			}
 		}); 
 		sp.addEventListener(new SettingsEventListener() {
@@ -128,6 +130,24 @@ public class MainPanel extends JPanel {
 			@Override
 			public void setDevice(String devName) {
 				sc.setDevice(devName);
+			}
+		});
+		vis.addEventListener(new VisualiserEventListener() {
+			@Override
+			public void streamStopRequested() {
+				sc.stop();
+			}
+			@Override
+			public void streamStartRequested() {
+				sc.start();
+			}
+			@Override
+			public void settingsFieldChanged(String field, String value) {
+				sp.saveVisSetting(field, value);
+			}
+			@Override
+			public HashMap<String, String> xmlSettingsRequested(){
+				return sp.getVisSettings();
 			}
 		});
 	}
